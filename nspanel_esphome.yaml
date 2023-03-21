@@ -107,22 +107,12 @@ uart:
   baud_rate: 115200
   id: tf_uart
 
-##### START - BUTTON CONFIGURATION #####
+###### REBOOT BUTTON #####
 button:
-  ###### REBOOT BUTTON #####
   - platform: restart
     name: ${device_name} Restart
     id: restart_nspanel
 
-  ##### UPDATE TFT DISPLAY #####
-  - platform: template
-    name: ${device_name} Update TFT display
-    icon: mdi:file-sync
-    id: tft_update
-    entity_category: config
-    on_press:
-      - delay: 16ms
-      - lambda: id(disp1).upload_tft();
 
 ##### START - API CONFIGURATION #####
 api:
@@ -171,7 +161,7 @@ api:
         - lambda: 'id(disp1).set_component_value(component.c_str(), message);'
 
     ##### Service to send a command "hide componente" directly to the display #####
-    - service: send_command_hide ### unused ###
+    - service: send_command_hide
       variables:
         component: string
       then:
@@ -180,20 +170,13 @@ api:
         - lambda: 'id(disp1).hide_component(component.c_str());'
 
     ##### Service to send a command "show componente" directly to the display #####
-    - service: send_command_show ### unused ###
+    - service: send_command_show
       variables:
         component: string
       then:
         - wait_until:
               switch.is_on: nextion_init
         - lambda: 'id(disp1).show_component(component.c_str());'
-
-    ##### Service to send a command "show ALL componente" directly to the display #####
-    - service: send_command_show_all ### unused ###
-      then:
-        - wait_until:
-              switch.is_on: nextion_init
-        - lambda: 'id(disp1).show_component("255");'
 
     ##### Service to send a command "font color" directly to the display #####
     - service: send_command_font_color
@@ -245,16 +228,6 @@ api:
             id(notification_label).publish_state("");
             id(notification_text).publish_state("");
         - switch.turn_off: notification_unread
-
-    ##### Service to set entity-information for settings-page(s)
-    - service: set_settings_entity
-      variables:
-        entity: string
-      then:
-        - wait_until:
-            switch.is_on: nextion_init
-        - lambda: |-
-            id(settings_entity).publish_state(entity.c_str());
 
     ##### Service to play a rtttl tones #####
     # Example tones : https://codebender.cc/sketch:109888#RTTTL%20Songs.ino
@@ -365,13 +338,18 @@ binary_sensor:
 
   ###### LEFT BUTTON BELOW DISPLAY TO TOGGLE RELAY#####
   - platform: gpio
-    name: ${device_name} Left Button
+    # name: ${device_name} Left Button
     id: left_button
     pin:
       number: 14
       inverted: true
     on_click:
+    - min_length: 50ms
+      max_length: 1000ms
       then:
+        - binary_sensor.template.publish:
+            id: left_button_short
+            state: ON
         - if:
             condition:
               and:
@@ -387,17 +365,50 @@ binary_sensor:
                     switch.is_on: relay_1
                   then:
                     - lambda: id(disp1).send_command_printf("home.icon_top_01.pic=105");
+        - delay: 500ms
+        - binary_sensor.template.publish:
+            id: left_button_short
+            state: OFF
+    on_press:
+      then:
+        - lambda: |-
+            if (id(disp1_currentpage).state == "lightsettings" or id(disp1_currentpage).state == "coversettings") {
+              ESP_LOGD("nspanel", "settingspage -> no press");
+            } else {
+              // ESP_LOGD("nspanel", "release button");
+              id(disp1_lastclick_general).set_state("pressbuttonleft",true,true);
+            }
+    on_release:
+      then:
+        - lambda: |-
+            if (id(disp1_currentpage).state == "lightsettings" or id(disp1_currentpage).state == "coversettings") {
+              ESP_LOGD("nspanel", "settingspage -> no release");
+            } else {
+              // ESP_LOGD("nspanel", "release button");
+              id(disp1_lastclick_general).set_state("releasebuttonleft",true,true);
+            }
+
+  - platform: template
+    name: ${device_name} Left Button
+    id: left_button_short
+    lambda: |-
+      return {};
 
 
   ##### RIGHT BUTTON BELOW DISPLAY TO TOGGLE RELAY #####
   - platform: gpio
-    name: ${device_name} Right Button
+    # name: ${device_name} Right Button
     id: right_button
     pin:
       number: 27
       inverted: true
     on_click:
+    - min_length: 50ms
+      max_length: 1000ms
       then:
+        - binary_sensor.template.publish:
+            id: right_button_short
+            state: ON
         - if:
             condition:
               and:
@@ -413,24 +424,40 @@ binary_sensor:
                     switch.is_on: relay_2
                   then:
                     - lambda: id(disp1).send_command_printf("home.icon_top_02.pic=106");
+        - delay: 500ms
+        - binary_sensor.template.publish:
+            id: right_button_short
+            state: OFF
+    on_press:
+      then:
+        - lambda: |-
+            if (id(disp1_currentpage).state == "lightsettings" or id(disp1_currentpage).state == "coversettings") {
+              ESP_LOGD("nspanel", "settingspage -> no press");
+            } else {
+              // ESP_LOGD("nspanel", "release button");
+              id(disp1_lastclick_general).set_state("pressbuttonright",true,true);
+            }
+    on_release:
+      then:
+        - lambda: |-
+            if (id(disp1_currentpage).state == "lightsettings" or id(disp1_currentpage).state == "coversettings") {
+              ESP_LOGD("nspanel", "settingspage -> no release");
+            } else {
+              // ESP_LOGD("nspanel", "release button");
+              id(disp1_lastclick_general).set_state("releasebuttonright",true,true);
+            }
 
-  ##### JUMP PAGE TO SETTING PAGE #####
-  - platform: nextion
-    name: $device_name setting page
-    page_id: 0
-    component_id: 53
-    internal: true
-    on_multi_click:
-      - timing:
-          - ON for at least 1s #LONG Press
-        then:
-          - lambda: 'id(disp1).send_command_printf("page settings");'
+  - platform: template
+    name: ${device_name} Right Button
+    id: right_button_short
+    lambda: |-
+      return {};
 
   ##### Restart NSPanel Button - Setting Page #####
   - platform: nextion
     name: ${device_name} Restart
     page_id: 7
-    component_id: 15
+    component_id: 8
     internal: true
     on_click:
       - button.press: restart_nspanel
@@ -448,7 +475,7 @@ binary_sensor:
   - platform: nextion
     name: ${device_name} Sleep Modus
     page_id: 7
-    component_id: 16
+    component_id: 3
     internal: true
     on_click:
       - switch.toggle: sleep_modus
@@ -477,14 +504,6 @@ sensor:
   - platform: wifi_signal
     name: ${device_name} RSSI
     update_interval: 60s
-    on_value:
-      - if:
-          condition:
-            wifi.connected:
-          then:
-            - lambda: id(disp1).set_component_text_printf("home.wifi_icon", "%s", "\U0000E5A8");
-          else:
-            - lambda: id(disp1).set_component_text_printf("home.wifi_icon", "%s", "\U0000FFFF");
 
   ##### INTERNAL TEMPERATURE SENSOR, ADC VALUE #####
   - platform: adc
@@ -596,10 +615,6 @@ text_sensor:
   - platform: template
     name: ${device_name} Notification Text
     id: notification_text
-
-  - platform: template
-    name: ${device_name} Settings Entity
-    id: settings_entity
 
   ##### last click sensor, the main action variable - push to HA #####
   - platform: nextion
@@ -785,6 +800,16 @@ switch:
     restore_state: false
     optimistic: true
 
+  ##### UPDATE TFT DISPLAY #####
+  - platform: template
+    name: ${device_name} Update TFT display
+    id: tft_update
+    entity_category: config
+    turn_on_action:
+      - delay: 16ms
+      - lambda: id(disp1).upload_tft();
+      - switch.turn_off: tft_update
+
   ##### PHYSICAL SWITCH 1 #####
   - platform: gpio
     name: ${device_name} Relay 1
@@ -925,11 +950,11 @@ display:
     on_setup:
       then:
         - lambda: id(disp1).send_command_printf("page 8");
-        - lambda: id(disp1).set_component_text_printf("boot.esph_version", "%s", "3.2"); ### esphome-version ###
+        - lambda: id(disp1).set_component_text_printf("boot.esph_version", "%s", "3.1.0"); ### esphome-version ###
         - wait_until:
             api.connected
         - lambda: id(disp1).set_component_text_printf("boot.ip_addr", "%s", id(ip_address).state.c_str());
-        - delay: 1s
+        - delay: 0.5s
         - number.set:
             id: display_brightness
             value: !lambda 'return id(display_brightness_global);'
@@ -942,7 +967,7 @@ display:
         - lambda: id(disp1).send_command_printf("settings.dimslider.val=%i", id(display_dim_brightness_global));
         - lambda: id(disp1).send_command_printf("home.sleepmodus.val=%i", id(sleep_modus_global));
         - lambda: id(disp1).set_component_value("settings.a02", id(sleep_modus_global) == 1);
-        - delay: 1s
+        - delay: 0.5s
         - switch.template.publish:
             id: nextion_init
             state: on
@@ -963,3 +988,4 @@ script:
             ESP_LOGD("nspanel", "timer->home");
             id(disp1).send_command_printf("page 0");
           }
+
